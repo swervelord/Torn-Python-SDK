@@ -6,11 +6,12 @@ import json
 import math
 import random
 import re
-from collections.abc import Generator, Iterable, Mapping
+from collections.abc import Callable, Generator, Iterable, Mapping
+from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from email.utils import parsedate_to_datetime
 from hashlib import sha256
-from typing import Literal
+from typing import Literal, ParamSpec
 from urllib.parse import SplitResult, parse_qsl, quote, quote_plus, unquote, urlencode, urlsplit
 
 from pydantic import JsonValue
@@ -49,6 +50,15 @@ _ACCESS_TYPES: dict[str, AccessLevel] = {
     "full": "full",
     "custom": "custom",
 }
+_HookArgs = ParamSpec("_HookArgs")
+
+
+def _notify(
+    hook: Callable[_HookArgs, None] | None, /, *args: _HookArgs.args, **kwargs: _HookArgs.kwargs
+) -> None:
+    if hook is not None:
+        with suppress(Exception):
+            hook(*args, **kwargs)
 
 
 class ExecutionContext:
@@ -422,8 +432,7 @@ class Executor:
                             prepared.version,
                         )
                         context._traces.append(trace)
-                        if self.hooks.on_response is not None:
-                            self.hooks.on_response(trace)
+                        _notify(self.hooks.on_response, trace)
                         return Response(cached.body, trace, cached.encoding)
                 reservation = self.pool.reserve(
                     explicit=explicit,
@@ -436,8 +445,8 @@ class Executor:
                     last=last,
                 )
             except TornError as error:
-                if trace is not None and self.hooks.on_error is not None:
-                    self.hooks.on_error(trace, error)
+                if trace is not None:
+                    _notify(self.hooks.on_error, trace, error)
                 raise
             if isinstance(reservation, float):
                 yield Wait(reservation)
@@ -458,8 +467,7 @@ class Executor:
                 False,
                 prepared.version,
             )
-            if self.hooks.on_request is not None:
-                self.hooks.on_request(trace)
+            _notify(self.hooks.on_request, trace)
             wire = yield Send(prepared, key, reservation.route, self.timeout(options))
             if wire is None:
                 raise RuntimeError("Torn executor resumed without a transport result")
@@ -470,8 +478,7 @@ class Executor:
             )
             context._traces.append(trace)
             if isinstance(wire, WireResponse):
-                if self.hooks.on_response is not None:
-                    self.hooks.on_response(trace)
+                _notify(self.hooks.on_response, trace)
                 failure = self._failure(wire, trace, options, prepared, key)
                 if failure is None:
                     response = Response(wire.body, trace, wire.encoding)
@@ -479,8 +486,7 @@ class Executor:
                         try:
                             response.json()
                         except TornError as error:
-                            if self.hooks.on_error is not None:
-                                self.hooks.on_error(trace, error)
+                            _notify(self.hooks.on_error, trace, error)
                             raise
                     if ttl > 0 and self.cache is not None:
                         cache_key = self._cache_key(prepared, slot, options.route)
@@ -527,11 +533,9 @@ class Executor:
                         rerouted = True
                         delay = 0.0
             if delay is None:
-                if self.hooks.on_error is not None:
-                    self.hooks.on_error(trace, failure)
+                _notify(self.hooks.on_error, trace, failure)
                 raise failure
-            if self.hooks.on_retry is not None:
-                self.hooks.on_retry(trace, failure, delay)
+            _notify(self.hooks.on_retry, trace, failure, delay)
             if delay > 0:
                 yield Wait(delay)
 

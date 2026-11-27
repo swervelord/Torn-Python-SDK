@@ -9,6 +9,7 @@ import httpx
 import pytest
 
 from torn_sdk.errors import (
+    ApiError,
     CancelledError,
     DecodeError,
     TimeoutError,
@@ -18,6 +19,7 @@ from torn_sdk.errors import (
     ValidationError,
     is_retryable,
 )
+from torn_sdk.testing import MockTransport, json_response, torn_error
 from torn_sdk.runtime import (
     AsyncRuntime,
     Hooks,
@@ -43,6 +45,22 @@ class VirtualClock:
 
     def sleep(self, seconds: float) -> None:
         self.now += seconds
+
+
+def test_failing_hooks_do_not_interrupt_requests_or_replace_errors() -> None:
+    def broken_hook(*args: object) -> None:
+        raise RuntimeError("consumer hook failed")
+
+    hooks = Hooks(
+        on_request=broken_hook, on_response=broken_hook, on_retry=broken_hook, on_error=broken_hook
+    )
+    transport = MockTransport([torn_error(17), json_response(True), torn_error(7)])
+    with Runtime("test-key-1234", transport=transport, clock=VirtualClock(), hooks=hooks) as client:
+        assert client.request(Request("/v2/user")) is True
+        with pytest.raises(ApiError) as error:
+            client.request(Request("/v2/user"))
+    assert error.value.code == TornErrorCode.INCORRECT_ID_ENTITY_RELATION
+    transport.assert_done()
 
 
 def test_cache_is_key_specific_expires_and_is_shared_by_clones() -> None:

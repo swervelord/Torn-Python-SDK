@@ -116,7 +116,7 @@ Caching is opt-in. Pass `cache=MemoryCache(max_entries=500)` to either client or
 
 ## Hooks
 
-Pass `hooks=Hooks(...)` with any of `on_request`, `on_response`, `on_retry`, and `on_error`. The callbacks receive a credential-redacted `RequestTrace` with the operation, URL, attempt, status, duration, route, and key hint. Retry and error callbacks also receive the typed error.
+Pass `hooks=Hooks(...)` with any of `on_request`, `on_response`, `on_retry`, and `on_error`. The callbacks receive a credential-redacted `RequestTrace` with the operation, URL, attempt, status, duration, route, and key hint. Retry and error callbacks also receive the typed error. Requests continue if a callback raises an exception.
 
 ## Testing
 

@@ -99,7 +99,7 @@ def live_client() -> Iterator[TornClient]:
     key = (os.getenv("TORN_API_KEY") or os.getenv("TORN_LIVE_TEST_API_KEY") or "").strip()
     if not key:
         pytest.skip("TORN_API_KEY is required for live tests")
-    with TornClient(key, config=RuntimeConfig(max_attempts=2)) as client:
+    with TornClient(key, config=RuntimeConfig(max_attempts=2, key_per_minute=75)) as client:
         yield client
 
 
@@ -170,6 +170,33 @@ def _harvest(
         pool["torn.itemUid"] = uid
 
 
+def _fetch(
+    client: TornClient, operation: Operation[RequestParams, object], values: dict[str, object]
+) -> object:
+    def send(parameters: dict[str, object]) -> object:
+        params = operation.params.model_validate(parameters)
+        time.sleep(0.7)
+        return client.exact(operation, params)
+
+    params = values
+    waited = False
+    while True:
+        try:
+            return send(params)
+        except ApiError as error:
+            if error.code == TornErrorCode.TOO_MANY_REQUESTS and not waited:
+                # Other consumers can use the same Torn user budget outside this process.
+                time.sleep(61)
+                waited = True
+                continue
+            if error.code == TornErrorCode.INCORRECT_CATEGORY and "cat" not in params:
+                choices = next((p.choices for p in operation.parameters if p.name == "cat"), ())
+                if choices:
+                    params = {**params, "cat": choices[0]}
+                    continue
+            raise
+
+
 def test_live_smoke(live_client: TornClient) -> None:
     info = live_client.get_key_info()
     assert info.info.user.id > 0
@@ -201,37 +228,18 @@ def test_live_sweep(live_client: TornClient) -> None:
                 else:
                     skipped.append(f"{operation.id} needs {missing}")
                 continue
-            time.sleep(0.7)
             try:
-                result = live_client.exact(operation, operation.params.model_validate(values))
-            except ApiError as error:
-                if error.code == 21 and "cat" not in values:
-                    category = next(
-                        (p.choices for p in operation.parameters if p.name == "cat"), ()
-                    )
-                    if category:
-                        try:
-                            params = operation.params.model_validate({**values, "cat": category[0]})
-                            time.sleep(0.7)
-                            result = live_client.exact(operation, params)
-                        except TornError as retry_error:
-                            error_code = retry_error.code
-                            if error_code is not None and error_code in SKIP_CODES:
-                                skipped.append(
-                                    f"{operation.id} returned Torn API code {int(error_code)}"
-                                )
-                            else:
-                                failures.append(f"{operation.id} {retry_error}")
-                        else:
-                            passed.append(operation.id)
-                            _harvest(operation, result, pool)
-                        continue
-                if error.code in SKIP_CODES and operation.path != "/key/info":
-                    skipped.append(f"{operation.id} returned Torn API code {int(error.code)}")
+                result = _fetch(live_client, operation, values)
+            except TornError as error:
+                error_code = error.code
+                if (
+                    error_code is not None
+                    and error_code in SKIP_CODES
+                    and operation.path != "/key/info"
+                ):
+                    skipped.append(f"{operation.id} returned Torn API code {int(error_code)}")
                 else:
                     failures.append(f"{operation.id} {error}")
-            except TornError as error:
-                failures.append(f"{operation.id} {error}")
             else:
                 passed.append(operation.id)
                 _harvest(operation, result, pool)
