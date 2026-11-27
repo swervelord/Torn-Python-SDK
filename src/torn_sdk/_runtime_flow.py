@@ -385,7 +385,7 @@ class Executor:
         skipped: set[str] = set()
         skipped_routes: set[str] = set()
         attempts: dict[str, int] = {}
-        rate_failures: dict[str, int] = {}
+        rate_limited: set[str] = set()
         last: ApiError | None = None
         trace: RequestTrace | None = None
         rerouted = False
@@ -508,11 +508,13 @@ class Executor:
                     delay = 0.0
                 elif action == "wait_rate_window":
                     preferred = None
-                    failures = rate_failures.get(slot.id, 0) + 1
-                    rate_failures[slot.id] = failures
                     delay = 0.0
-                    if failures >= max(2, max_attempts):
-                        skipped.add(slot.id)
+                    if slot.id in rate_limited:
+                        attempt = attempts.get(slot.id, 0) + 1
+                        attempts[slot.id] = attempt
+                        if attempt >= max_attempts:
+                            delay = None
+                    rate_limited.add(slot.id)
                 elif action == "rotate_route":
                     skipped_routes.add(reservation.route)
                     preferred = slot

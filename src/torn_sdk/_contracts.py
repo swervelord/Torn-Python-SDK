@@ -34,11 +34,13 @@ class Operation(Generic[P, R]):
     response: type[R]
     parameters: tuple[Parameter, ...]
     access: AccessLevel
-    cache_ttl: int
+    cache_ttl: int | None
     paginated: bool
     media_type: str
     summary: str
-    stability: Literal["current", "deprecated"] = "current"
+    stability: str = "Unknown"
+    deprecated: bool = False
+    method: Literal["GET"] = "GET"
     item_field: tuple[str, ...] | None = None
     item_type: object | None = None
 

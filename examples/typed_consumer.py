@@ -11,13 +11,17 @@ from torn_sdk.testing import json_response, mock_async_sdk, mock_sdk
 
 
 def sync_example() -> None:
-    client, transport = mock_sdk([
-        json_response({"timestamp": 42, "job": None}),
-        json_response({
-            "itemhistory": [{"timestamp": 42, "price": 713, "circulation": None}],
-            "_metadata": {"links": {"next": None, "prev": None}},
-        }),
-    ])
+    client, transport = mock_sdk(
+        [
+            json_response({"timestamp": 42, "job": None}),
+            json_response(
+                {
+                    "itemhistory": [{"timestamp": 42, "price": 713, "circulation": None}],
+                    "_metadata": {"links": {"next": None, "prev": None}},
+                }
+            ),
+        ]
+    )
     with client as sdk:
         assert_type(sdk, TornClient)
         batch = sdk.user().batch(selections.user.timestamp, selections.user.job)

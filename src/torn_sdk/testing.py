@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, TypeAlias
 
 import httpx
 
+from ._runtime_types import key_hint
 from .runtime import JsonValue, RuntimeConfig
 
 if TYPE_CHECKING:
@@ -64,7 +65,7 @@ class MockTransport(httpx.MockTransport):
                     request.method,
                     redact(request.url.path),
                     query,
-                    ("***" + key[-4:] if len(key) > 4 else "***") if key else None,
+                    key_hint(key) if key else None,
                 )
             )
             if not self._script:
@@ -172,7 +173,9 @@ def mock_sdk(
 
     transport = MockTransport(script)
     client = TornClient(
-        api_key, transport=transport, config=RuntimeConfig(jitter=False),
+        api_key,
+        transport=transport,
+        config=RuntimeConfig(jitter=False),
         clock=clock or VirtualClock(),
     )
     return client, transport
@@ -188,7 +191,9 @@ def mock_async_sdk(
 
     transport = MockTransport(script)
     client = AsyncTornClient(
-        api_key, transport=transport, config=RuntimeConfig(jitter=False),
+        api_key,
+        transport=transport,
+        config=RuntimeConfig(jitter=False),
         clock=clock or AsyncVirtualClock(),
     )
     return client, transport

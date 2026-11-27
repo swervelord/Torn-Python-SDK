@@ -9,12 +9,41 @@ from collections.abc import Iterator, Mapping
 import pytest
 from pydantic import BaseModel
 
-from torn_sdk import OPERATIONS, ApiError, Operation, RuntimeConfig, TornClient, TornError
+from torn_sdk import (
+    OPERATIONS,
+    ApiError,
+    Operation,
+    RuntimeConfig,
+    TornClient,
+    TornError,
+    TornErrorCode,
+)
 from torn_sdk._model import RequestParams
 
 pytestmark = pytest.mark.live
 
-SKIP_CODES = frozenset({3, 4, 6, 7, 9, 16, 19, 20, 21, 22, 23, 25, 26, 27, 28, 29, 30})
+SKIP_CODES = frozenset(
+    {
+        3,
+        4,
+        6,
+        7,
+        9,
+        16,
+        19,
+        20,
+        21,
+        22,
+        23,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        TornErrorCode.NO_COMPETITION_AVAILABLE,
+    }
+)
 SEEDS: dict[str, int] = {
     "company.typeId": 1,
     "forum.categoryIds": 2,
@@ -23,7 +52,6 @@ SEEDS: dict[str, int] = {
     "racing.trackId": 6,
     "torn.crimeId": 1,
     "torn.logCategoryId": 1,
-    "torn.shopId": 1,
     "torn.stockId": 1,
     "torn.typeId": 1,
     "user.crimeId": 1,
@@ -32,8 +60,14 @@ ARRAYS: dict[str, tuple[str, int | None]] = {
     "/torn/{ids}/honors": ("ids", 1),
     "/torn/{ids}/medals": ("ids", 1),
     "/torn/{ids}/items": ("ids", 206),
-    "/torn/{ids}/itemstats": ("ids", 206),
+    "/torn/{ids}/itemstats": ("ids", None),
     "/torn/{ids}/itemdetails": ("ids", None),
+}
+GENERIC_SELECTIONS = {
+    "getForumGeneric": "timestamp",
+    "getKeyGeneric": "info",
+    "getRacingGeneric": "timestamp",
+    "getTornGeneric": "timestamp",
 }
 HARVEST: dict[str, tuple[tuple[str, str], ...]] = {
     "/key/info": (
@@ -53,6 +87,7 @@ HARVEST: dict[str, tuple[tuple[str, str], ...]] = {
     "/user/properties": (("properties.0.id", "property.id"),),
     "/racing/races": (("races.0.id", "racing.raceId"),),
     "/racing/tracks": (("tracks.0.id", "racing.trackId"),),
+    "/torn/cityshops": (("cityshops.0.id", "torn.shopId"),),
     "/torn/elimination": (("elimination.0.id", "torn.id"),),
     "/user/trades": (("trades.0.id", "user.tradeId"),),
     "/user/attacks": (("attacks.0.code", "torn.log"),),
@@ -100,6 +135,8 @@ def _inputs(
 ) -> tuple[dict[str, object], str | None]:
     resource = operation.path.split("/")[1]
     values: dict[str, object] = {}
+    if selection := GENERIC_SELECTIONS.get(operation.id):
+        values["selections"] = [selection]
     for parameter in operation.parameters:
         if not parameter.required:
             continue
@@ -119,7 +156,9 @@ def _inputs(
     return values, None
 
 
-def _harvest(operation: Operation[RequestParams, object], result: object, pool: dict[str, int | str]) -> None:
+def _harvest(
+    operation: Operation[RequestParams, object], result: object, pool: dict[str, int | str]
+) -> None:
     if not isinstance(result, BaseModel):
         return
     payload = result.model_dump(mode="json", by_alias=True)
@@ -167,7 +206,9 @@ def test_live_sweep(live_client: TornClient) -> None:
                 result = live_client.exact(operation, operation.params.model_validate(values))
             except ApiError as error:
                 if error.code == 21 and "cat" not in values:
-                    category = next((p.choices for p in operation.parameters if p.name == "cat"), ())
+                    category = next(
+                        (p.choices for p in operation.parameters if p.name == "cat"), ()
+                    )
                     if category:
                         try:
                             params = operation.params.model_validate({**values, "cat": category[0]})
@@ -176,7 +217,9 @@ def test_live_sweep(live_client: TornClient) -> None:
                         except TornError as retry_error:
                             error_code = retry_error.code
                             if error_code is not None and error_code in SKIP_CODES:
-                                skipped.append(f"{operation.id} returned Torn API code {int(error_code)}")
+                                skipped.append(
+                                    f"{operation.id} returned Torn API code {int(error_code)}"
+                                )
                             else:
                                 failures.append(f"{operation.id} {retry_error}")
                         else:

@@ -24,7 +24,11 @@ def test_exact_operation_surface_matches_the_pinned_spec() -> None:
         operation_id = methods["get"]["operationId"]
         endpoint = operations.OPERATIONS[operation_id]
         assert endpoint.path == path
+        assert endpoint.stability == methods["get"].get("x-stability", "Unknown")
+        assert endpoint.deprecated == methods["get"].get("deprecated", False)
         assert all(parameter.name != "key" for parameter in endpoint.parameters)
+    assert operations.get_my_inventory.cache_ttl == 900
+    assert operations.get_torn_timestamp.cache_ttl is None
     for name, endpoint in vars(operations).items():
         if getattr(endpoint, "id", None) not in operations.OPERATIONS:
             continue

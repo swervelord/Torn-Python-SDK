@@ -237,7 +237,7 @@ class Response:
 class CacheEntry:
     body: bytes = field(repr=False)
     status: int
-    encoding: str
+    encoding: str = field(repr=False)
 
 
 class Cache(Protocol):

@@ -93,8 +93,11 @@ class _Lifetime:
 
 
 def _env_keys(env: Mapping[str, str]) -> tuple[str, ...]:
-    values = env.get("TORN_API_KEYS", env.get("TORN_API_KEY", ""))
-    return tuple(key.strip() for key in values.split(",") if key.strip())
+    keys = tuple(key for value in env.get("TORN_API_KEYS", "").split(",") if (key := value.strip()))
+    if keys:
+        return keys
+    single = env.get("TORN_API_KEY", "").strip()
+    return (single,) if single else ()
 
 
 def _env_config(env: Mapping[str, str]) -> RuntimeConfig:
@@ -673,7 +676,7 @@ class AsyncRuntime(_RuntimeBase):
         finally:
             if not task.done():
                 task.cancel()
-                await asyncio.gather(task, return_exceptions=True)
+            await asyncio.gather(task, return_exceptions=True)
 
     async def _wait(self, delay: float, options: RequestOptions) -> None:
         end = self._clock.monotonic() + delay

@@ -340,13 +340,13 @@ def resolve(nodes: dict[str, Schema], value: Schema) -> Schema:
     return nodes[ref_name(value)] if "$ref" in value else value
 
 
-def cache_ttl(description: str) -> int:
+def cache_ttl(description: str) -> int | None:
     match = re.search(r"cach(?:ed|e)[^.\n]*?(\d+)\s*(seconds?|minutes?|hours?|days?)", description, re.I)
     if match:
         amount = int(match[1])
         unit = match[2].lower().rstrip("s")
         return amount * {"second": 1, "minute": 60, "hour": 3600, "day": 86400}[unit]
-    return 29
+    return None
 
 
 def metadata_shape(models: Models, schema: Schema) -> bool:
@@ -425,7 +425,8 @@ class Operations:
                 "paginated": paginated,
                 "media": media,
                 "summary": operation.get("summary", "").strip(),
-                "stability": "deprecated" if operation.get("deprecated") else "current",
+                "stability": operation.get("x-stability", "Unknown"),
+                "deprecated": operation.get("deprecated", False),
                 "item_path": item_path,
                 "item_type": typed_item,
             }
@@ -490,7 +491,7 @@ from ._model import RequestParams
                     f"{choices!r}, {param.get('style')!r}, {param.get('explode', True)!r}),"
                 )
             lines.append("    ),")
-            for key in ("access", "cache_ttl", "paginated", "summary", "stability"):
+            for key in ("access", "cache_ttl", "paginated", "summary", "stability", "deprecated"):
                 lines.append(f"    {key}={entry[key]!r},")
             lines.append(f'    media_type={entry["media"]!r},')
             lines.append(f'    item_field={entry["item_path"]!r},')
@@ -633,80 +634,149 @@ from ._contracts import Endpoint, Selection
         sections.append("\n".join(namespaces))
         return "\n\n\n".join(sections) + "\n"
 
+    def filters(self, entry: Schema) -> dict[str, list[str]]:
+        filters: dict[str, list[str]] = defaultdict(list)
+        for endpoint in entry["endpoints"]:
+            for parameter in self.ops.entries[endpoint["id"]]["parameters"]:
+                key = parameter["name"]
+                if parameter["in"] != "query" or key in {"id", "selections", "legacy"}:
+                    continue
+                annotation = self.ops.parameter_type(parameter["schema"], facades=True)
+                if annotation not in filters[key]:
+                    filters[key].append(annotation)
+        return filters
+
+    def resource_call(
+        self, entry: Schema, *, asynchronous: bool, raw: bool, filters: dict[str, list[str]]
+    ) -> list[str]:
+        define = "async def" if asynchronous else "def"
+        wait = "await " if asynchronous else ""
+        resource = entry["resource"]
+        name = entry["name"]
+        attr = field_name(name)
+        if raw:
+            attr += "_raw"
+        elif attr in {"select", "batch", "execute", "plan", "raw"}:
+            attr += "_"
+        response = ("str" if entry["csv"] else "dict[str, JsonValue]") if raw else entry["result_type"]
+        lines = [f"    {define} {attr}(", "        self,", "        *,"]
+        lines.extend(
+            f"        {field_name(key)}: {union([*values, 'None'])} = None,"
+            for key, values in filters.items()
+        )
+        lines.extend([
+            "        query: Query | None = None,",
+            "        path_args: Mapping[str, TargetValue] | None = None,",
+            '        version: Version = "auto",',
+            "        options: RequestOptions | None = None,",
+        ])
+        if not raw:
+            lines.append("        strict: bool | None = None,")
+        lines.append(f"    ) -> {response}:")
+        if filters:
+            lines.append("        extra_filters: dict[str, QueryValue] = {}")
+            for key in filters:
+                variable = field_name(key)
+                lines.extend([
+                    f"        if {variable} is not None:",
+                    f"            extra_filters[{key!r}] = {variable}",
+                ])
+        source = "merge_filters(query, extra_filters)" if filters else "query"
+        returns = f"cast({response!r}, {wait}self._raw_selected(" if raw else f"{wait}self.select("
+        lines.extend([
+            f"        return {returns}",
+            f"            selections.{resource}.{field_name(name)}, query={source},",
+            "            path_args=path_args, version=version, options=options,"
+            + ("" if raw else " strict=strict,"),
+            "        ))" if raw else "        )",
+            "",
+        ])
+        return lines
+
+    def award_calls(self, *, asynchronous: bool) -> list[str]:
+        define = "async def" if asynchronous else "def"
+        wait = "await " if asynchronous else ""
+        lines: list[str] = []
+        for name in ("honors", "medals"):
+            prefix = f"User{pascal(name)}"
+            cat_name = f"{prefix}Category"
+            categories = self.ops.models.schemas[cat_name]["enum"]
+            detail_types = ", ".join(repr(category) for category in categories if category != "all")
+            for basic in (True, False):
+                variant = "basic" if basic else "detailed"
+                response = f"models.{prefix}{'' if basic else 'Detailed'}Response"
+                lines.extend([f"    {define} {name}_{variant}(", "        self,"])
+                if not basic:
+                    lines.append(f"        category: Literal[{detail_types}] | models.{cat_name},")
+                lines.extend([
+                    "        *,",
+                    "        query: Query | None = None,",
+                    "        comment: str | None = None,",
+                    "        timestamp: int | str | None = None,",
+                    "        options: RequestOptions | None = None,",
+                    "        strict: bool | None = None,",
+                    f"    ) -> {response}:",
+                    f'        """Return the {variant} {name} model for the key owner."""',
+                ])
+                if not basic:
+                    lines.extend([
+                        "        if category == 'all':",
+                        f"            raise ValidationError('Use {name}_basic() for category all')",
+                    ])
+                category = "'all'" if basic else "category"
+                lines.extend([
+                    f"        filters: dict[str, QueryValue] = {{'cat': {category}}}",
+                    "        if comment is not None:",
+                    "            filters['comment'] = comment",
+                    "        if timestamp is not None:",
+                    "            filters['timestamp'] = timestamp",
+                    f"        batch = {wait}self.batch(",
+                    f"            selections.user.{name}, query=merge_filters(query, filters),",
+                    "            options=options, force_direct=True, typed=False,",
+                    "        )",
+                    f"        payload = self._raw_value(batch, selections.user.{name})",
+                    "        return decode(",
+                    f"            self._client, {response}, payload, 'user.{name}', options,",
+                    "            self._client.strict if strict is None else strict,",
+                    "        )",
+                    "",
+                ])
+        return lines
+
     def resources(self) -> str:
         imports = '''"""Typed calls on bound Torn API resources."""
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Annotated, Literal
+from typing import Annotated, Literal, cast
 
 from pydantic import Field, JsonValue
 
 from . import compatibility, models, selections
+from ._client_support import decode
 from ._resource import AsyncResource, Resource, merge_filters
+from .errors import ValidationError
 from .planner import TargetValue, Version
 from .runtime import Query, QueryValue, RequestOptions
 '''
         sections = [HEADER + imports.rstrip()]
         for asynchronous in (False, True):
             prefix = "Async" if asynchronous else ""
-            define = "async def" if asynchronous else "def"
-            wait = "await " if asynchronous else ""
             for resource, entries in self.groups.items():
                 resource_class = f"{prefix}{pascal(resource)}"
                 fields = [f"class {resource_class}({prefix}Resource):", f"    resource = {resource!r}", ""]
-                for name, entry in entries.items():
-                    attr = field_name(name)
-                    if attr in {"select", "batch", "execute", "plan", "raw"}:
-                        attr += "_"
-                    response = entry["result_type"]
-                    filters: dict[str, list[str]] = defaultdict(list)
-                    for ep in entry["endpoints"]:
-                        for param in self.ops.entries[ep["id"]]["parameters"]:
-                            if param["in"] == "query" and param["name"] not in {"id", "selections", "legacy"}:
-                                schema = param["schema"]
-                                annotation = self.ops.parameter_type(schema, facades=True)
-                                annotations = filters[param["name"]]
-                                if annotation not in annotations:
-                                    annotations.append(annotation)
-                    fields.extend([
-                        f"    {define} {attr}(",
-                        "        self,",
-                        "        *,",
-                    ])
-                    fields.extend(
-                        f"        {field_name(key)}: {union([*values, 'None'])} = None,"
-                        for key, values in filters.items()
-                    )
-                    fields.extend([
-                        "        query: Query | None = None,",
-                        "        path_args: Mapping[str, TargetValue] | None = None,",
-                        '        version: Version = "auto",',
-                        "        options: RequestOptions | None = None,",
-                        "        strict: bool | None = None,",
-                        f"    ) -> {response}:",
-                    ])
-                    if filters:
-                        fields.append("        extra_filters: dict[str, QueryValue] = {}")
-                        for key in filters:
-                            variable = field_name(key)
-                            fields.extend([
-                                f"        if {variable} is not None:",
-                                f"            extra_filters[{key!r}] = {variable}",
-                            ])
-                    source = "merge_filters(query, extra_filters)" if filters else "query"
-                    fields.extend([
-                        f"        return {wait}self.select(",
-                        f"            selections.{resource}.{field_name(name)}, query={source},",
-                        "            path_args=path_args, version=version, options=options, strict=strict,",
-                        "        )",
-                        "",
-                    ])
+                for entry in entries.values():
+                    filters = self.filters(entry)
+                    for raw in (False, True):
+                        fields.extend(self.resource_call(entry, asynchronous=asynchronous, raw=raw, filters=filters))
+                if resource == "user":
+                    fields.extend(self.award_calls(asynchronous=asynchronous))
                 for qualified, alias in self.deprecated.items():
                     ns, name = qualified.split("/")
                     if ns == resource:
-                        fields.append(f"    {field_name(name)} = {field_name(alias['selection'])}")
+                        old, current = field_name(name), field_name(alias['selection'])
+                        fields.extend([f"    {old} = {current}", f"    {old}_raw = {current}_raw"])
                 sections.append("\n".join(fields).rstrip())
         return "\n\n\n".join(sections) + "\n"
 

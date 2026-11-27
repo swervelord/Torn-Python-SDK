@@ -32,9 +32,7 @@ def _array(value: object) -> bool:
     return isinstance(value, (list, tuple))
 
 
-def operation_request(
-    operation: Operation[P, R], params: P | None, query: Query | None
-) -> Request:
+def operation_request(operation: Operation[P, R], params: P | None, query: Query | None) -> Request:
     try:
         validated = operation.params.model_validate({}) if params is None else params
     except ModelValidationError:
@@ -75,7 +73,11 @@ def operation_request(
     if not path.startswith("/v2/"):
         path = f"/v2{path}"
     return Request(
-        path, encoded, operation.id, operation.access, operation.cache_ttl,
+        path,
+        encoded,
+        operation.id,
+        operation.access,
+        operation.cache_ttl,
         expect_json=operation.media_type == "application/json",
     )
 
@@ -100,7 +102,11 @@ def decode(
     request: Request | None = None,
 ) -> T:
     return decode_response(
-        model, payload, operation=operation, strict=strict, raw=raw,
+        model,
+        payload,
+        operation=operation,
+        strict=strict,
+        raw=raw,
         redact=lambda value: runtime.redact(value, options, request),
     )
 
@@ -113,8 +119,11 @@ def items_at(page: object, path: tuple[str, ...] | None) -> Sequence[object]:
             page = page.get(segment)
         elif isinstance(page, BaseModel):
             field_name = next(
-                (name for name, field in type(page).model_fields.items()
-                 if (field.alias or name) == segment),
+                (
+                    name
+                    for name, field in type(page).model_fields.items()
+                    if (field.alias or name) == segment
+                ),
                 segment,
             )
             page = getattr(page, field_name, None)

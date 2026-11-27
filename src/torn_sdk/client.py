@@ -52,38 +52,69 @@ class TornClient(Runtime, ExactCalls):
         return self
 
     def exact(
-        self, operation: Operation[P, R], params: P | None = None, *,
-        query: Query | None = None, options: RequestOptions | None = None,
+        self,
+        operation: Operation[P, R],
+        params: P | None = None,
+        *,
+        query: Query | None = None,
+        options: RequestOptions | None = None,
         strict: bool | None = None,
     ) -> R:
         request = operation_request(operation, params, query)
         response = self.request_response(request, options=options)
         payload = response.json() if request.expect_json else response.text()
         return decode(
-            self, operation.response, payload, operation.id, options,
-            self.strict if strict is None else strict, raw=response.body, request=request,
+            self,
+            operation.response,
+            payload,
+            operation.id,
+            options,
+            self.strict if strict is None else strict,
+            raw=response.body,
+            request=request,
         )
 
     def exact_pages(
-        self, operation: Operation[P, R], params: P | None = None, *,
-        query: Query | None = None, options: RequestOptions | None = None,
-        strict: bool | None = None, backwards: bool = False, max_pages: int | None = None,
+        self,
+        operation: Operation[P, R],
+        params: P | None = None,
+        *,
+        query: Query | None = None,
+        options: RequestOptions | None = None,
+        strict: bool | None = None,
+        backwards: bool = False,
+        max_pages: int | None = None,
     ) -> Iterator[R]:
         if not operation.paginated:
             raise ValidationError(f"{operation.id} has no pagination contract")
         request = operation_request(operation, params, query)
         for response in self.page_responses(
-            request, options=options, backwards=backwards, max_pages=max_pages,
+            request,
+            options=options,
+            backwards=backwards,
+            max_pages=max_pages,
         ):
             yield decode(
-                self, operation.response, response.json(), operation.id, options,
-                self.strict if strict is None else strict, raw=response.body, request=request,
+                self,
+                operation.response,
+                response.json(),
+                operation.id,
+                options,
+                self.strict if strict is None else strict,
+                raw=response.body,
+                request=request,
             )
 
     def exact_items(
-        self, operation: Operation[P, R], params: P | None = None, *,
-        query: Query | None = None, options: RequestOptions | None = None,
-        strict: bool | None = None, backwards: bool = False, max_pages: int | None = None,
+        self,
+        operation: Operation[P, R],
+        params: P | None = None,
+        *,
+        query: Query | None = None,
+        options: RequestOptions | None = None,
+        strict: bool | None = None,
+        backwards: bool = False,
+        max_pages: int | None = None,
         limit: int | None = None,
     ) -> Iterator[object]:
         if limit is not None and limit < 0:
@@ -91,8 +122,13 @@ class TornClient(Runtime, ExactCalls):
         if limit == 0:
             return
         for page in self.exact_pages(
-            operation, params, query=query, options=options, strict=strict,
-            backwards=backwards, max_pages=max_pages,
+            operation,
+            params,
+            query=query,
+            options=options,
+            strict=strict,
+            backwards=backwards,
+            max_pages=max_pages,
         ):
             for item in items_at(page, operation.item_field):
                 yield item
@@ -102,58 +138,105 @@ class TornClient(Runtime, ExactCalls):
                         return
 
     def raw_get(
-        self, path: str, query: Query | None = None, *,
-        version: RawVersion = "v2", options: RequestOptions | None = None,
+        self,
+        path: str,
+        query: Query | None = None,
+        *,
+        version: RawVersion = "v2",
+        options: RequestOptions | None = None,
     ) -> JsonValue:
         return self.request(raw_request(path, query, version), options=options)
 
     def raw_typed(
-        self, path: str, model: type[R], query: Query | None = None, *,
-        version: RawVersion = "v2", options: RequestOptions | None = None,
+        self,
+        path: str,
+        model: type[R],
+        query: Query | None = None,
+        *,
+        version: RawVersion = "v2",
+        options: RequestOptions | None = None,
         strict: bool | None = None,
     ) -> R:
         request = raw_request(path, query, version)
         response = self.request_response(request, options=options)
         return decode(
-            self, model, response.json(), path, options,
-            self.strict if strict is None else strict, raw=response.body, request=request,
+            self,
+            model,
+            response.json(),
+            path,
+            options,
+            self.strict if strict is None else strict,
+            raw=response.body,
+            request=request,
         )
 
     def raw_pages(
-        self, path: str, query: Query | None = None, *,
-        version: RawVersion = "v2", options: RequestOptions | None = None,
-        backwards: bool = False, max_pages: int | None = None,
+        self,
+        path: str,
+        query: Query | None = None,
+        *,
+        version: RawVersion = "v2",
+        options: RequestOptions | None = None,
+        backwards: bool = False,
+        max_pages: int | None = None,
     ) -> Iterator[JsonValue]:
         return self.pages(
-            raw_request(path, query, version), options=options, backwards=backwards,
+            raw_request(path, query, version),
+            options=options,
+            backwards=backwards,
             max_pages=max_pages,
         )
 
     def raw_items(
-        self, path: str, query: Query | None = None, *,
-        version: RawVersion = "v2", options: RequestOptions | None = None,
-        field: str | None = None, backwards: bool = False, max_pages: int | None = None,
+        self,
+        path: str,
+        query: Query | None = None,
+        *,
+        version: RawVersion = "v2",
+        options: RequestOptions | None = None,
+        field: str | None = None,
+        backwards: bool = False,
+        max_pages: int | None = None,
         limit: int | None = None,
     ) -> Iterator[JsonValue]:
         return self.items(
-            raw_request(path, query, version), options=options, field=field,
-            backwards=backwards, max_pages=max_pages, limit=limit,
+            raw_request(path, query, version),
+            options=options,
+            field=field,
+            backwards=backwards,
+            max_pages=max_pages,
+            limit=limit,
         )
 
     def batch(
-        self, resource: str, selections: Sequence[SelectionInput], *,
-        id: TargetValue | None = None, query: Query | None = None,
-        path_args: Mapping[str, TargetValue] | None = None, version: Version = "auto",
-        force_direct: bool = False, options: RequestOptions | None = None, strict: bool | None = None,
+        self,
+        resource: str,
+        selections: Sequence[SelectionInput],
+        *,
+        id: TargetValue | None = None,
+        query: Query | None = None,
+        path_args: Mapping[str, TargetValue] | None = None,
+        version: Version = "auto",
+        force_direct: bool = False,
+        options: RequestOptions | None = None,
+        strict: bool | None = None,
         typed: bool = True,
     ) -> BatchResult:
         """Plan and execute selections, preserving each selection's independent outcome."""
         plan = plan_selections(
-            resource, selections, id=id, query=query, path_args=path_args,
-            version=version, force_direct=force_direct,
+            resource,
+            selections,
+            id=id,
+            query=query,
+            path_args=path_args,
+            version=version,
+            force_direct=force_direct,
         )
         return execute_plan(
-            self, plan, options=options, typed=typed,
+            self,
+            plan,
+            options=options,
+            typed=typed,
             strict=self.strict if strict is None else strict,
         )
 
@@ -194,38 +277,69 @@ class AsyncTornClient(AsyncRuntime, AsyncExactCalls):
         return self
 
     async def exact(
-        self, operation: Operation[P, R], params: P | None = None, *,
-        query: Query | None = None, options: RequestOptions | None = None,
+        self,
+        operation: Operation[P, R],
+        params: P | None = None,
+        *,
+        query: Query | None = None,
+        options: RequestOptions | None = None,
         strict: bool | None = None,
     ) -> R:
         request = operation_request(operation, params, query)
         response = await self.request_response(request, options=options)
         payload = response.json() if request.expect_json else response.text()
         return decode(
-            self, operation.response, payload, operation.id, options,
-            self.strict if strict is None else strict, raw=response.body, request=request,
+            self,
+            operation.response,
+            payload,
+            operation.id,
+            options,
+            self.strict if strict is None else strict,
+            raw=response.body,
+            request=request,
         )
 
     async def exact_pages(
-        self, operation: Operation[P, R], params: P | None = None, *,
-        query: Query | None = None, options: RequestOptions | None = None,
-        strict: bool | None = None, backwards: bool = False, max_pages: int | None = None,
+        self,
+        operation: Operation[P, R],
+        params: P | None = None,
+        *,
+        query: Query | None = None,
+        options: RequestOptions | None = None,
+        strict: bool | None = None,
+        backwards: bool = False,
+        max_pages: int | None = None,
     ) -> AsyncIterator[R]:
         if not operation.paginated:
             raise ValidationError(f"{operation.id} has no pagination contract")
         request = operation_request(operation, params, query)
         async for response in self.page_responses(
-            request, options=options, backwards=backwards, max_pages=max_pages,
+            request,
+            options=options,
+            backwards=backwards,
+            max_pages=max_pages,
         ):
             yield decode(
-                self, operation.response, response.json(), operation.id, options,
-                self.strict if strict is None else strict, raw=response.body, request=request,
+                self,
+                operation.response,
+                response.json(),
+                operation.id,
+                options,
+                self.strict if strict is None else strict,
+                raw=response.body,
+                request=request,
             )
 
     async def exact_items(
-        self, operation: Operation[P, R], params: P | None = None, *,
-        query: Query | None = None, options: RequestOptions | None = None,
-        strict: bool | None = None, backwards: bool = False, max_pages: int | None = None,
+        self,
+        operation: Operation[P, R],
+        params: P | None = None,
+        *,
+        query: Query | None = None,
+        options: RequestOptions | None = None,
+        strict: bool | None = None,
+        backwards: bool = False,
+        max_pages: int | None = None,
         limit: int | None = None,
     ) -> AsyncIterator[object]:
         if limit is not None and limit < 0:
@@ -233,8 +347,13 @@ class AsyncTornClient(AsyncRuntime, AsyncExactCalls):
         if limit == 0:
             return
         async for page in self.exact_pages(
-            operation, params, query=query, options=options, strict=strict,
-            backwards=backwards, max_pages=max_pages,
+            operation,
+            params,
+            query=query,
+            options=options,
+            strict=strict,
+            backwards=backwards,
+            max_pages=max_pages,
         ):
             for item in items_at(page, operation.item_field):
                 yield item
@@ -244,57 +363,104 @@ class AsyncTornClient(AsyncRuntime, AsyncExactCalls):
                         return
 
     async def raw_get(
-        self, path: str, query: Query | None = None, *,
-        version: RawVersion = "v2", options: RequestOptions | None = None,
+        self,
+        path: str,
+        query: Query | None = None,
+        *,
+        version: RawVersion = "v2",
+        options: RequestOptions | None = None,
     ) -> JsonValue:
         return await self.request(raw_request(path, query, version), options=options)
 
     async def raw_typed(
-        self, path: str, model: type[R], query: Query | None = None, *,
-        version: RawVersion = "v2", options: RequestOptions | None = None,
+        self,
+        path: str,
+        model: type[R],
+        query: Query | None = None,
+        *,
+        version: RawVersion = "v2",
+        options: RequestOptions | None = None,
         strict: bool | None = None,
     ) -> R:
         request = raw_request(path, query, version)
         response = await self.request_response(request, options=options)
         return decode(
-            self, model, response.json(), path, options,
-            self.strict if strict is None else strict, raw=response.body, request=request,
+            self,
+            model,
+            response.json(),
+            path,
+            options,
+            self.strict if strict is None else strict,
+            raw=response.body,
+            request=request,
         )
 
     def raw_pages(
-        self, path: str, query: Query | None = None, *,
-        version: RawVersion = "v2", options: RequestOptions | None = None,
-        backwards: bool = False, max_pages: int | None = None,
+        self,
+        path: str,
+        query: Query | None = None,
+        *,
+        version: RawVersion = "v2",
+        options: RequestOptions | None = None,
+        backwards: bool = False,
+        max_pages: int | None = None,
     ) -> AsyncIterator[JsonValue]:
         return self.pages(
-            raw_request(path, query, version), options=options, backwards=backwards,
+            raw_request(path, query, version),
+            options=options,
+            backwards=backwards,
             max_pages=max_pages,
         )
 
     def raw_items(
-        self, path: str, query: Query | None = None, *,
-        version: RawVersion = "v2", options: RequestOptions | None = None,
-        field: str | None = None, backwards: bool = False, max_pages: int | None = None,
+        self,
+        path: str,
+        query: Query | None = None,
+        *,
+        version: RawVersion = "v2",
+        options: RequestOptions | None = None,
+        field: str | None = None,
+        backwards: bool = False,
+        max_pages: int | None = None,
         limit: int | None = None,
     ) -> AsyncIterator[JsonValue]:
         return self.items(
-            raw_request(path, query, version), options=options, field=field,
-            backwards=backwards, max_pages=max_pages, limit=limit,
+            raw_request(path, query, version),
+            options=options,
+            field=field,
+            backwards=backwards,
+            max_pages=max_pages,
+            limit=limit,
         )
 
     async def batch(
-        self, resource: str, selections: Sequence[SelectionInput], *,
-        id: TargetValue | None = None, query: Query | None = None,
-        path_args: Mapping[str, TargetValue] | None = None, version: Version = "auto",
-        force_direct: bool = False, options: RequestOptions | None = None, strict: bool | None = None,
+        self,
+        resource: str,
+        selections: Sequence[SelectionInput],
+        *,
+        id: TargetValue | None = None,
+        query: Query | None = None,
+        path_args: Mapping[str, TargetValue] | None = None,
+        version: Version = "auto",
+        force_direct: bool = False,
+        options: RequestOptions | None = None,
+        strict: bool | None = None,
         typed: bool = True,
     ) -> BatchResult:
         plan = plan_selections(
-            resource, selections, id=id, query=query, path_args=path_args,
-            version=version, force_direct=force_direct,
+            resource,
+            selections,
+            id=id,
+            query=query,
+            path_args=path_args,
+            version=version,
+            force_direct=force_direct,
         )
         return await execute_plan_async(
-            self, plan, options=options, typed=typed,
+            self,
+            plan,
+            options=options,
+            typed=typed,
             strict=self.strict if strict is None else strict,
         )
 

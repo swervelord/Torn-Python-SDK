@@ -188,8 +188,13 @@ def test_env_precedence_and_split_version_base_urls() -> None:
     with Runtime.from_env(environ=env, transport=httpx.MockTransport(send)) as client:
         assert client.request(Request("/user")) is True
         assert client.request(Request("/v2/user")) is True
+    with Runtime.from_env(
+        environ={**env, "TORN_API_KEYS": " ", "TORN_API_KEY": " second "},
+        transport=httpx.MockTransport(send),
+    ) as client:
+        assert client.request(Request("/v2/user")) is True
     with pytest.raises(ValidationError):
-        Runtime.from_env(environ={**env, "TORN_API_KEYS": " "})
+        Runtime.from_env(environ={"TORN_API_KEYS": " , "})
 
 
 def test_detected_owner_shares_window_and_detected_access_is_applied() -> None:

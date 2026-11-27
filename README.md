@@ -144,7 +144,7 @@ For live verification, set `TORN_API_KEY` (or `TORN_LIVE_TEST_API_KEY`) and run 
 
 ## Raw access
 
-Use `raw_get("/user", {"selections": "profile"})` for raw JSON. Set `version="v1"` for legacy paths. `raw_typed(path, Model, query)` decodes into a generated or custom model. Resource facades expose `raw_selection` and `raw_selections` for arbitrary names. Both clients accept an injected HTTPX transport.
+Use `raw_get("/user", {"selections": "profile"})` for raw JSON. Set `version="v1"` for legacy paths. `raw_typed(path, Model, query)` decodes into a generated or custom model. Resource facades expose named raw methods such as `user().profile_raw()`, alongside `raw_selection` and `raw_selections` for arbitrary names. Both clients accept an injected HTTPX transport.
 
 ## Helpers
 

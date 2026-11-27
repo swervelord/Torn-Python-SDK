@@ -30,13 +30,21 @@ class _Resource:
         self.id = id
 
     def plan(
-        self, *selections: SelectionInput, query: Query | None = None,
-        path_args: Mapping[str, TargetValue] | None = None, version: Version = "auto",
+        self,
+        *selections: SelectionInput,
+        query: Query | None = None,
+        path_args: Mapping[str, TargetValue] | None = None,
+        version: Version = "auto",
         force_direct: bool = False,
     ) -> RequestPlan:
         return plan_selections(
-            self.resource, selections, id=self.id, query=query, path_args=path_args,
-            version=version, force_direct=force_direct,
+            self.resource,
+            selections,
+            id=self.id,
+            query=query,
+            path_args=path_args,
+            version=version,
+            force_direct=force_direct,
         )
 
     def _check_selection(self, selection: Selection[object]) -> None:
@@ -59,57 +67,106 @@ class Resource(_Resource):
         self._client = client
 
     def batch(
-        self, *selections: SelectionInput, query: Query | None = None,
-        path_args: Mapping[str, TargetValue] | None = None, version: Version = "auto",
-        force_direct: bool = False, options: RequestOptions | None = None,
-        strict: bool | None = None, typed: bool = True,
+        self,
+        *selections: SelectionInput,
+        query: Query | None = None,
+        path_args: Mapping[str, TargetValue] | None = None,
+        version: Version = "auto",
+        force_direct: bool = False,
+        options: RequestOptions | None = None,
+        strict: bool | None = None,
+        typed: bool = True,
     ) -> BatchResult:
         return self._client.batch(
-            self.resource, selections, id=self.id, query=query, path_args=path_args,
-            version=version, force_direct=force_direct, options=options, strict=strict, typed=typed,
+            self.resource,
+            selections,
+            id=self.id,
+            query=query,
+            path_args=path_args,
+            version=version,
+            force_direct=force_direct,
+            options=options,
+            strict=strict,
+            typed=typed,
         )
 
     def select(
-        self, selection: Selection[R], *, query: Query | None = None,
-        path_args: Mapping[str, TargetValue] | None = None, version: Version = "auto",
-        options: RequestOptions | None = None, strict: bool | None = None,
+        self,
+        selection: Selection[R],
+        *,
+        query: Query | None = None,
+        path_args: Mapping[str, TargetValue] | None = None,
+        version: Version = "auto",
+        options: RequestOptions | None = None,
+        strict: bool | None = None,
     ) -> R:
         self._check_selection(selection)
         return self.batch(
-            selection, query=query, path_args=path_args, version=version,
-            options=options, strict=strict,
+            selection,
+            query=query,
+            path_args=path_args,
+            version=version,
+            options=options,
+            strict=strict,
         ).get(selection)
 
     def raw_selection(
-        self, selection: str, *, query: Query | None = None,
-        path_args: Mapping[str, TargetValue] | None = None, version: Version = "auto",
+        self,
+        selection: str,
+        *,
+        query: Query | None = None,
+        path_args: Mapping[str, TargetValue] | None = None,
+        version: Version = "auto",
         options: RequestOptions | None = None,
     ) -> dict[str, JsonValue]:
         return self.raw_selections(
-            selection, query=query, path_args=path_args, version=version, options=options,
+            selection,
+            query=query,
+            path_args=path_args,
+            version=version,
+            options=options,
         )
 
     def _raw_selected(
-        self, selection: Selection[object], *, query: Query | None = None,
-        path_args: Mapping[str, TargetValue] | None = None, version: Version = "auto",
+        self,
+        selection: Selection[object],
+        *,
+        query: Query | None = None,
+        path_args: Mapping[str, TargetValue] | None = None,
+        version: Version = "auto",
         options: RequestOptions | None = None,
     ) -> dict[str, JsonValue] | str:
         self._check_selection(selection)
         batch = self.batch(
-            selection, query=query, path_args=path_args, version=version, options=options,
+            selection,
+            query=query,
+            path_args=path_args,
+            version=version,
+            options=options,
             typed=False,
         )
         return self._raw_value(batch, selection)
 
     def raw_selections(
-        self, *selections: str, query: Query | None = None,
-        path_args: Mapping[str, TargetValue] | None = None, version: Version = "auto",
+        self,
+        *selections: str,
+        query: Query | None = None,
+        path_args: Mapping[str, TargetValue] | None = None,
+        version: Version = "auto",
         options: RequestOptions | None = None,
     ) -> dict[str, JsonValue]:
-        return self.batch(
-            *selections, query=query, path_args=path_args, version=version, options=options,
-            typed=False,
-        ).raise_for_errors().data
+        return (
+            self.batch(
+                *selections,
+                query=query,
+                path_args=path_args,
+                version=version,
+                options=options,
+                typed=False,
+            )
+            .raise_for_errors()
+            .data
+        )
 
 
 class AsyncResource(_Resource):
@@ -120,56 +177,101 @@ class AsyncResource(_Resource):
         self._client = client
 
     async def batch(
-        self, *selections: SelectionInput, query: Query | None = None,
-        path_args: Mapping[str, TargetValue] | None = None, version: Version = "auto",
-        force_direct: bool = False, options: RequestOptions | None = None,
-        strict: bool | None = None, typed: bool = True,
+        self,
+        *selections: SelectionInput,
+        query: Query | None = None,
+        path_args: Mapping[str, TargetValue] | None = None,
+        version: Version = "auto",
+        force_direct: bool = False,
+        options: RequestOptions | None = None,
+        strict: bool | None = None,
+        typed: bool = True,
     ) -> BatchResult:
         return await self._client.batch(
-            self.resource, selections, id=self.id, query=query, path_args=path_args,
-            version=version, force_direct=force_direct, options=options, strict=strict, typed=typed,
+            self.resource,
+            selections,
+            id=self.id,
+            query=query,
+            path_args=path_args,
+            version=version,
+            force_direct=force_direct,
+            options=options,
+            strict=strict,
+            typed=typed,
         )
 
     async def select(
-        self, selection: Selection[R], *, query: Query | None = None,
-        path_args: Mapping[str, TargetValue] | None = None, version: Version = "auto",
-        options: RequestOptions | None = None, strict: bool | None = None,
+        self,
+        selection: Selection[R],
+        *,
+        query: Query | None = None,
+        path_args: Mapping[str, TargetValue] | None = None,
+        version: Version = "auto",
+        options: RequestOptions | None = None,
+        strict: bool | None = None,
     ) -> R:
         self._check_selection(selection)
         result = await self.batch(
-            selection, query=query, path_args=path_args, version=version,
-            options=options, strict=strict,
+            selection,
+            query=query,
+            path_args=path_args,
+            version=version,
+            options=options,
+            strict=strict,
         )
         return result.get(selection)
 
     async def raw_selection(
-        self, selection: str, *, query: Query | None = None,
-        path_args: Mapping[str, TargetValue] | None = None, version: Version = "auto",
+        self,
+        selection: str,
+        *,
+        query: Query | None = None,
+        path_args: Mapping[str, TargetValue] | None = None,
+        version: Version = "auto",
         options: RequestOptions | None = None,
     ) -> dict[str, JsonValue]:
         return await self.raw_selections(
-            selection, query=query, path_args=path_args, version=version, options=options,
+            selection,
+            query=query,
+            path_args=path_args,
+            version=version,
+            options=options,
         )
 
     async def _raw_selected(
-        self, selection: Selection[object], *, query: Query | None = None,
-        path_args: Mapping[str, TargetValue] | None = None, version: Version = "auto",
+        self,
+        selection: Selection[object],
+        *,
+        query: Query | None = None,
+        path_args: Mapping[str, TargetValue] | None = None,
+        version: Version = "auto",
         options: RequestOptions | None = None,
     ) -> dict[str, JsonValue] | str:
         self._check_selection(selection)
         batch = await self.batch(
-            selection, query=query, path_args=path_args, version=version, options=options,
+            selection,
+            query=query,
+            path_args=path_args,
+            version=version,
+            options=options,
             typed=False,
         )
         return self._raw_value(batch, selection)
 
     async def raw_selections(
-        self, *selections: str, query: Query | None = None,
-        path_args: Mapping[str, TargetValue] | None = None, version: Version = "auto",
+        self,
+        *selections: str,
+        query: Query | None = None,
+        path_args: Mapping[str, TargetValue] | None = None,
+        version: Version = "auto",
         options: RequestOptions | None = None,
     ) -> dict[str, JsonValue]:
         result = await self.batch(
-            *selections, query=query, path_args=path_args, version=version, options=options,
+            *selections,
+            query=query,
+            path_args=path_args,
+            version=version,
+            options=options,
             typed=False,
         )
         return result.raise_for_errors().data

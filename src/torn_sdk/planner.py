@@ -182,7 +182,9 @@ def _metadata(resource: str, names: tuple[str, ...]) -> tuple[AccessLevel | None
             cacheable = False
         for endpoint in selection.endpoints:
             operation = OPERATIONS.get(endpoint.id)
-            if operation is not None:
+            if operation is None or operation.cache_ttl is None:
+                cacheable = False
+            else:
                 ttl_seconds.append(operation.cache_ttl)
     return (
         max(access_levels, key=_ACCESS_ORDER.__getitem__, default=None),
