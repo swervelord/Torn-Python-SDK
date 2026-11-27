@@ -1,0 +1,5 @@
+include CHANGELOG.md
+recursive-include examples *.py
+recursive-include spec *.json *.md
+recursive-include tests *.py *.json
+recursive-include scripts *.py
