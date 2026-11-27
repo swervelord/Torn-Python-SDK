@@ -7,3 +7,4 @@
 - Added header authentication, key owner budgets, key and egress rotation, retries, typed errors, and access checks (P2–P6).
 - Added typed pagination, optional caches, redacted hooks, deterministic test utilities, and Torn URL and time helpers (P7–P8).
 - Added shared conformance tests, an opt-in live sweep, deterministic generation checks, static typing verification, and wheel and source distribution validation (P9).
+- Live validation found that `/torn/{ids}/itemstats` returns `itemstats` and uses item names in `name`. Its generated response accepts both live and OpenAPI field names and types the item name as a string (P1.2).

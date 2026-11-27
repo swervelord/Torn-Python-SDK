@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Annotated, TypeAlias
 
-from pydantic import Field, JsonValue
+from pydantic import AliasChoices, Field, JsonValue
 
 from ._model import OpenEnum, OpenIntEnum, WireModel
 
@@ -11614,14 +11614,18 @@ class TornItemStat(WireModel):
 class TornItemStats(WireModel):
     id: ItemId
     uid: ItemUid
-    name: TornItemStatTitleEnum
+    name: str
     type: TornItemTypeEnum
     sub_type: TornItemWeaponTypeEnum | None
     stats: list[TornItemStat]
 
 
 class TornItemStatsResponse(WireModel):
-    itemdetails: list[TornItemStats]
+    itemstats: list[TornItemStats] = Field(validation_alias=AliasChoices('itemstats', 'itemdetails'))
+
+    @property
+    def itemdetails(self) -> list[TornItemStats]:
+        return self.itemstats
 
 
 class TornRockPaperScissorsResponse(WireModel):

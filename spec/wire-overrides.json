@@ -1,0 +1,14 @@
+{
+  "TornItemStatsResponse": {
+    "itemdetails": {
+      "name": "itemstats"
+    }
+  },
+  "TornItemStats": {
+    "name": {
+      "schema": {
+        "type": "string"
+      }
+    }
+  }
+}

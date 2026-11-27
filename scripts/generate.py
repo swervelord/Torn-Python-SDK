@@ -88,9 +88,15 @@ from ._model import OpenEnum, OpenIntEnum, WireModel
 
 
 class Models:
-    def __init__(self, schemas: dict[str, Schema], overrides: dict[tuple[str, str], str]):
+    def __init__(
+        self,
+        schemas: dict[str, Schema],
+        overrides: dict[tuple[str, str], str],
+        wire_overrides: dict[str, dict[str, Schema]] | None = None,
+    ):
         self.schemas = schemas
         self.overrides = overrides
+        self.wire_overrides = wire_overrides or {}
         self.classes: dict[str, str] = {}
         self.aliases: dict[str, str] = {}
         self.enums: dict[str, str] = {}
@@ -125,9 +131,13 @@ class Models:
         properties.update({key: {} for key in sorted(required - properties.keys())})
         lines = [f"class {name}(WireModel):"]
         relaxed = []
+        accessors = []
         used: set[str] = set()
         for key, field_schema in properties.items():
-            attr = field_name(key)
+            wire_override = self.wire_overrides.get(name, {}).get(key, {})
+            wire_key = wire_override.get("name", key)
+            field_schema = wire_override.get("schema", field_schema)
+            attr = field_name(wire_key)
             while attr in used:
                 attr += "_"
             used.add(attr)
@@ -137,10 +147,20 @@ class Models:
             if not is_required or change == "nullable":
                 field_type = union([field_type, "None"])
             if change == "optional" and key in required:
-                relaxed.append(key)
+                relaxed.append(wire_key)
             arguments = ([] if is_required else ["default=None"]) + (
-                [] if attr == key else [f"alias={key!r}"]
+                [] if attr == wire_key else [f"alias={wire_key!r}"]
             )
+            if wire_key != key:
+                arguments.append(f"validation_alias=AliasChoices({wire_key!r}, {key!r})")
+                previous_attr = field_name(key)
+                if previous_attr != attr:
+                    accessors.extend((
+                        "",
+                        "    @property",
+                        f"    def {previous_attr}(self) -> {field_type}:",
+                        f"        return self.{attr}",
+                    ))
             field_call = f" = Field({', '.join(arguments)})" if arguments else ""
             lines.append(f"    {attr}: {field_type}{field_call}")
         if relaxed:
@@ -149,6 +169,7 @@ class Models:
             lines.append("    __accept_extra__ = True")
         if len(lines) == 1:
             lines.append("    pass")
+        lines.extend(accessors)
         self.classes[name] = "\n".join(lines)
         return name
 
@@ -254,6 +275,8 @@ class Models:
         return ordered
 
     def render(self, docstring: str, imports: str = MODEL_IMPORTS) -> str:
+        if any("name" in field for fields in self.wire_overrides.values() for field in fields.values()):
+            imports = imports.replace("from pydantic import Field", "from pydantic import AliasChoices, Field")
         sections = [f'{HEADER}"""{docstring}"""\n\n{imports.rstrip()}']
         sections.extend(self.enums.values())
         sections.extend(self.classes.values())
@@ -888,7 +911,7 @@ def generate() -> dict[Path, str]:
     routing_overrides = read("routing-overrides.json")
     v1 = read("v1-catalog.json")
     schemas = model_spec["components"]["schemas"]
-    models = Models(schemas, overrides)
+    models = Models(schemas, overrides, read("wire-overrides.json"))
     models.populate()
     compat = Compatibility(read("compatibility-models.json"), {})
     compat.populate()

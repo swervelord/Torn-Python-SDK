@@ -82,6 +82,22 @@ def test_strict_mode_reinstates_upstream_required_fields() -> None:
     assert decode_payload(models.TornHalloweenUpgrade, {**payload, "type": "future"}).type == "future"
 
 
+@pytest.mark.parametrize("wire_name", ["itemstats", "itemdetails"])
+def test_item_stats_uses_live_wire_name_and_accepts_the_openapi_spelling(wire_name: str) -> None:
+    item = {
+        "id": 247,
+        "uid": 123456,
+        "name": "Katana",
+        "type": "Weapon",
+        "sub_type": "Slashing",
+        "stats": [{"id": 1, "title": "Damage", "value": 60}],
+    }
+    payload = decode_payload(models.TornItemStatsResponse, {wire_name: [item]}, strict=True)
+    assert payload.itemstats[0].stats[0].value == 60
+    assert payload.itemdetails is payload.itemstats
+    assert payload.model_dump(mode="json", by_alias=True) == {"itemstats": [item]}
+
+
 def test_compatibility_models_normalize_documented_legacy_shapes() -> None:
     employee = compatibility.CompanyEmployee.model_validate({
         "position": {"name": "Engineer"}, "future": 42,
